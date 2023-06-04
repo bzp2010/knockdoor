@@ -2,6 +2,8 @@ package main
 
 import (
 	"net"
+	"sync"
+	"time"
 
 	"github.com/bzp2010/knockdoor/knockdoor"
 	"github.com/google/gopacket"
@@ -10,7 +12,9 @@ import (
 )
 
 var (
-	visitors = map[string]*knockdoor.Visitor{}
+	wg            sync.WaitGroup
+	visitorsMutex sync.Mutex
+	visitors      = map[string]*knockdoor.Visitor{}
 )
 
 func main() {
@@ -22,30 +26,53 @@ func main() {
 	}
 
 	ipRawConn, _ := ipv4.NewRawConn(conn)
-	for {
-		buf := make([]byte, 1500)
-		hdr, payload, _, _ := ipRawConn.ReadFrom(buf)
-		sourceIP := hdr.Src.String()
+	go func(conn *ipv4.RawConn) {
+		for {
+			buf := make([]byte, 1500)
+			ipHdr, payload, _, _ := ipRawConn.ReadFrom(buf)
+			sourceIP := ipHdr.Src.String()
 
-		// skip localhost
-		if sourceIP == "127.0.0.1" {
-			continue
-		}
-
-		packet := gopacket.NewPacket(payload, layers.LayerTypeTCP, gopacket.Default)
-		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-			tcp, _ := tcpLayer.(*layers.TCP)
-
-			if !tcp.SYN {
+			// skip localhost
+			if sourceIP == "127.0.0.1" {
 				continue
 			}
 
-			if _, ok := visitors[sourceIP]; !ok {
-				visitors[sourceIP] = knockdoor.NewVisitor()
+			packet := gopacket.NewPacket(payload, layers.LayerTypeTCP, gopacket.Default)
+			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+				tcp, _ := tcpLayer.(*layers.TCP)
+
+				if !tcp.SYN {
+					continue
+				}
+
+				if _, ok := visitors[sourceIP]; !ok {
+					visitorsMutex.Lock()
+					visitors[sourceIP] = knockdoor.NewVisitor()
+					visitorsMutex.Unlock()
+				}
+
+				if clean := visitors[sourceIP].Handle(ipHdr, tcp); clean {
+					visitorsMutex.Lock()
+					delete(visitors, sourceIP)
+					visitorsMutex.Unlock()
+				}
 			}
-			visitors[sourceIP].Handle(tcp)
 		}
-	}
+	}(ipRawConn)
+
+	// clean visitors every 1 minutes
+	go func() {
+		ticker := time.NewTicker(time.Second * 60)
+		for {
+			<-ticker.C
+			visitorsMutex.Lock()
+			visitors = map[string]*knockdoor.Visitor{}
+			visitorsMutex.Unlock()
+		}
+	}()
+
+	wg.Add(1)
+	wg.Wait()
 }
 
 /* fmt.Println("SOURCE:", hdr.Src, tcp.SrcPort)
