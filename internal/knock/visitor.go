@@ -13,19 +13,19 @@ type Visitor struct {
 }
 
 // NewVisitor creates a new visitor to knock the door
-func NewVisitor(cfg config.Port, doneCallback func(ip string)) *Visitor {
+func NewVisitor(cfg config.Knock, doneCallback func()) *Visitor {
 	v := &Visitor{}
 
 	switch cfg.Mode {
 	case "totp":
 		v.mechanism = NewTOTPKnock(*cfg.TOTP, func() {
-			doneCallback(v.sourceIP)
+			doneCallback()
 		})
 	case "static":
 		fallthrough
 	default:
 		v.mechanism = NewStaticKnock(*cfg.Static, func() {
-			doneCallback(v.sourceIP)
+			doneCallback()
 		})
 	}
 	return v

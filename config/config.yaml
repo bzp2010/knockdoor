@@ -1,8 +1,8 @@
 log:
-  level: "warn"
+  level: "info"
   path: "logs/error.log"
 
-port:
+knock:
   mode: static # static or totp
   static:
     - 9999
@@ -12,3 +12,11 @@ port:
     secret: "secret"
     prefix: "999"
   skipLoopback: true
+
+door:
+  type: "routeros"
+  routeros:
+    endpoint: "http://10.0.0.1"
+    username: "admin"
+    password: ""
+    addressListName: "OPEN_DOOR"

@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/bzp2010/knockdoor/internal/config"
+	"github.com/bzp2010/knockdoor/internal/door"
 	"github.com/bzp2010/knockdoor/internal/knock"
 	"github.com/bzp2010/knockdoor/internal/log"
 	"github.com/google/gopacket"
@@ -50,6 +50,9 @@ func run(cmd *cobra.Command, args []string) error {
 		return errors.Wrap(err, "failed to setup logger")
 	}
 
+	log.GetLogger().Info("Starting knockdoor")
+
+	// setup knockdoor on IPv4
 	err := listenIPv4(cfg)
 	if err != nil {
 		return err
@@ -84,7 +87,7 @@ func handleIPv4RawConn(cfg config.Config, conn *ipv4.RawConn) {
 		sourceIP := ipHdr.Src.String()
 
 		// skip loopback
-		if cfg.Port.SkipLoopback && ipHdr.Src.IsLoopback() {
+		if cfg.Knock.SkipLoopback && ipHdr.Src.IsLoopback() {
 			continue
 		}
 
@@ -98,19 +101,28 @@ func handleIPv4RawConn(cfg config.Config, conn *ipv4.RawConn) {
 
 			if _, ok := visitors[sourceIP]; !ok {
 				visitorsMutex.Lock()
-				visitors[sourceIP] = knock.NewVisitor(cfg.Port, func(ip string) {
-					fmt.Println("OPEN THE DOOR, I AM", ip)
+				visitors[sourceIP] = knock.NewVisitor(cfg.Knock, func() {
+					log.GetLogger().Infow("Visitor is verified, open the door", "ip", sourceIP)
+
+					if err := door.NewRouterOSDoor(cfg.Door).Open(sourceIP); err != nil {
+						log.GetLogger().Error(err)
+						removeVisitor(sourceIP)
+					}
 				})
 				visitorsMutex.Unlock()
 			}
 
 			if clean := visitors[sourceIP].Handle(ipHdr, tcp); clean {
-				visitorsMutex.Lock()
-				delete(visitors, sourceIP)
-				visitorsMutex.Unlock()
+				removeVisitor(sourceIP)
 			}
 		}
 	}
+}
+
+func removeVisitor(ip string) {
+	visitorsMutex.Lock()
+	delete(visitors, ip)
+	visitorsMutex.Unlock()
 }
 
 func visitorCleaner() {

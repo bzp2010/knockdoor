@@ -15,14 +15,23 @@ func NewDefaultConfig() Config {
 			Level: "warn",
 			Path:  "logs/error.log",
 		},
-		Port: Port{
+		Knock: Knock{
 			Mode:   "static",
 			Static: &[]uint16{9999, 9998, 9997},
-			TOTP: &PortTOTP{
+			TOTP: &KnockTOTP{
 				Secret: "secret",
 				Prefix: "999",
 			},
 			SkipLoopback: true,
+		},
+		Door: Door{
+			Type: "routeros",
+			RouterOS: &DoorRouterOS{
+				Endpoint:        "127.0.0.1",
+				Username:        "admin",
+				Password:        "",
+				AddressListName: "OPEN_DOOR",
+			},
 		},
 	}
 }

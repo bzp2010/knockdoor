@@ -47,7 +47,7 @@ func SetupLogger(config config.Config) error {
 		}),
 	)
 	coreConsole := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encConfig),
+		zapcore.NewJSONEncoder(encConfig),
 		zapcore.AddSync(os.Stdout),
 		zap.LevelEnablerFunc(func(l zapcore.Level) bool {
 			return level.Enabled(l)
