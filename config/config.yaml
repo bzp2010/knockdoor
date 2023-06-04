@@ -1,0 +1,14 @@
+log:
+  level: "warn"
+  path: "logs/error.log"
+
+port:
+  mode: static # static or totp
+  static:
+    - 9999
+    - 9998
+    - 9997
+  totp:
+    secret: "secret"
+    prefix: "999"
+  skipLoopback: true
